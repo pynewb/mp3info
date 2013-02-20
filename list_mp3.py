@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Introduces:
+#  array slicing
 #  Filename matching using regular expressions
 #  Argument processing using sys.argv
 #  Early termination with the exit function
@@ -28,4 +29,4 @@ if (len(sys.argv) > 1):
     for arg in sys.argv[1:]:
         list_mp3(arg)
 else:
-    list_mp3(raw_input("Enter the top directory: "))
+    list_mp3(os.path.expanduser(raw_input("Enter the top directory: ")))
