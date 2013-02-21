@@ -354,6 +354,8 @@ class ID3v2Parser:
         
         frame_data = self.f.read(frame_size)
         
+        # TODO: move parsing logic from print_ functions into this class
+        #       then pass a parsed dictionary to the handler
         self.handler.on_id3v2dot3_frame(frame_type, frame_data)
 
         return True
