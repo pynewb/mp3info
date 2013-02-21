@@ -63,7 +63,7 @@ def unpack_unicode(bytes):
     This returns a tuple of (number-of-bytes-consumed, string)
     '''
     i = 0
-    while i + 2 < len(bytes):
+    while i + 1 < len(bytes):
         uch = struct.unpack_from('<H', bytes[i:i+2])[0]
         if uch == 0:
             return (i + 2, bytes[0:i].decode('utf-16'))
@@ -111,14 +111,42 @@ def print_comm_frame(frame_data):
     print("{0:>40s} : {1}".format('Comment text', comment_string))
 
 def print_geob_frame(frame_data):
-    pass
+    '''Prints data for an ID3v2.3 general encapsulated object frame'''    
+    frame_encoding = ord(frame_data[0])
+    mime_len, mime_type = unpack_string(frame_data[1:])
+
+    if frame_encoding == 0:
+        description_len, description_string = unpack_string(frame_data[1 + mime_len:])
+        filename_len, filename_string = unpack_string(frame_data[1 + mime_len + description_len:])
+        binary_data = frame_data[1 + mime_len + description_len + filename_len:]
+    elif frame_encoding == 1:
+        description_len, description_string = unpack_unicode(frame_data[1 + mime_len:])
+        filename_len, filename_string = unpack_unicode(frame_data[1 + mime_len + description_len:])
+        binary_data = frame_data[1 + mime_len + description_len + filename_len:]
+    else:
+        print("Unknown frame encoding {0:02x}".format(frame_encoding), file=sys.stderr)
+        return
+
+    print("{0:>40s} : {1}".format('General encapsulated object mime type', mime_type))
+    print("{0:>40s} : {1}".format('General encapsulated object description', description_string))
+    print("{0:>40s} : {1}".format('General encapsulated object filename', filename_string))
+    print("{0:>40s} : {1:d}".format('General encapsulated object data length', len(binary_data)))
 
 def print_mcdi_frame(frame_data):
-    pass
+    '''Prints data for an ID3v2.3 music CD identifier frame'''
+    print("{0:>40s} : {1:d}".format('Music CD identifier data length', len(frame_data)))
 
 def print_priv_frame(frame_data):
-    pass
-
+    '''Prints data for an ID3v2.3 private frame'''
+    owner_len, owner_string = unpack_string(frame_data)
+    private_data = frame_data[owner_len:]
+    print("{0:>40s} : {1}".format('Private owner', owner_string))
+    print("{0:>40s} : {1:d}".format('Private data length', len(private_data)))
+    if owner_string == 'WM/UniqueFileIdentifier' or owner_string == 'WM/Provider':
+        private_len, private_string = unpack_unicode(private_data)
+        if len(private_string) > 0:
+            print("{0:>40s} : {1}".format('Private data', private_string))
+        
 def print_text_info_frame(frame_name, frame_data):
     '''Prints data for an ID3v2.3 text info frame'''
     frame_encoding = ord(frame_data[0])
