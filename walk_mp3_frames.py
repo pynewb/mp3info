@@ -3,10 +3,7 @@
 # The ID3v2 specification is at http://id3.org
 #
 # Introduces:
-#  with
-#  File I/O
-#  Unpacking binary data with struct
-#  Using str.endswith instead of a regular expression
+#  More file I/O (seek and tell)
 #
 
 from __future__ import print_function
