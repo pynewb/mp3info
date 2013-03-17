@@ -406,7 +406,7 @@ class ID3v2Parser:
 
     def parse_id3v2dot3_frame(self):
     
-        if self.f.tell() >= self.id3v2_size:
+        if self.f.tell() + 10 >= self.id3v2_size:
             return False
         
         frame_header = self.f.read(10)
@@ -419,6 +419,9 @@ class ID3v2Parser:
     
         frame_type, frame_size, frame_flags = struct.unpack_from(">4sIH", frame_header)
     
+        if frame_type == '\x00\x00\x00\x00':
+            return False
+
         if frame_size == 0:
             return False
 
