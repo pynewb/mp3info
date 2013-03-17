@@ -6,6 +6,7 @@
 #  class
 #  self
 #  docstrings
+#  bytearray
 #  str.format alignment
 #
 
