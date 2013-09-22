@@ -19,6 +19,8 @@ import re
 import struct
 import sys
 
+import mp3_event_parser
+
 def isprint(ch):
     '''Gets whether a byte represents an ASCII printable character'''
     return ch >= 32 and ch < 127
@@ -73,7 +75,7 @@ def print_priv_frame(frame_dict):
     print("{0:>40s} : {1}".format('Private owner', frame_dict['owner_string']))
     print("{0:>40s} : {1:d}".format('Private data length', len(frame_dict['private_data'])))
     if frame_dict['owner_string'] == 'WM/UniqueFileIdentifier' or frame_dict['owner_string'] == 'WM/Provider':
-        private_len, private_string = unpack_unicode(str(frame_dict['private_data']))
+        private_len, private_string = mp3_event_parser.unpack_unicode(str(frame_dict['private_data']))
         if len(private_string) > 0:
             print("{0:>40s} : {1}".format('Private data', private_string))
         
@@ -87,7 +89,7 @@ def print_uslt_frame(frame_dict):
     print("{0:>40s} : {1}".format('Unsynchronized lyric translation description', frame_dict['descriptor_string']))
     print("{0:>40s} : {1}".format('Unsynchronized lyric translation text', frame_dict['lyrics_string']))
 
-class ID3v2Printer:
+class ID3v2Printer(object):
     '''A handler for the ID3v2 file parser that prints the parsed pieces'''
 
     def __init__(self, aatpath, hexdump, print_headers):
@@ -176,331 +178,6 @@ class ID3v2Printer:
         if self.hexdump:
             print_bytes(frame_header)
 
-def unpack_string(bytes):
-    '''Unpacks a nul-terminated string
-    
-    This returns a tuple of (number-of-bytes-consumed, string)
-    '''
-    i = 0
-    while i < len(bytes):
-        if ord(bytes[i]) == 0:
-            return (i + 1, bytes[0:i])
-        i += 1
-        
-    return (len(bytes), '')
-
-def unpack_unicode(bytes):
-    '''Unpacks a nul-terminated unicode string
-    
-    This returns a tuple of (number-of-bytes-consumed, string)
-    '''
-    i = 0
-    while i + 1 < len(bytes):
-        uch = struct.unpack_from('<H', bytes[i:i+2])[0]
-        if uch == 0:
-            return (i + 2, bytes[0:i].decode('utf-16'))
-        i += 2
-    
-    return (len(bytes), u'')
-
-class ID3v2Parser:
-    '''Parses an ID3v2 file, such as a non-ancient MP3 file
-    
-    A handler for this parser must have the following methods:
-    
-    on_path(path)
-    on_aatpath(artist, album, track)
-    on_raw_id3v2_header(header)
-    on_id3v2_header(version, revision, flags, size)
-    on_raw_id3v2dot3_frame_header(self, frame_header)
-    on_id3v2dot3_frame_header(frame_type, frame_size, frame_flags)
-    on_raw_id3v2dot3_frame(frame_type, frame_data)
-    on_id3v2dot3_frame(frame_type, frame_data)
-    '''
-
-    def print_error(self, msg):
-        print(self.path, ':', msg, file=sys.stderr)
-
-    def parse_apic_frame(self, frame_data):
-        '''Parses an ID3v2.3 attached picture frame'''
-        frame_encoding = ord(frame_data[0])
-        mime_len, mime_type = unpack_string(frame_data[1:])
-        picture_type = ord(frame_data[1 + mime_len])
-    
-        if frame_encoding == 0:
-            description_len, description_string = unpack_string(frame_data[2 + mime_len:])
-            picture_data = frame_data[2 + mime_len + description_len:]
-        elif frame_encoding == 1:
-            description_len, description_string = unpack_unicode(frame_data[2 + mime_len:])
-            picture_data = frame_data[2 + mime_len + description_len:]
-        else:
-            self.print_error("Unknown frame encoding {0:02x}".format(frame_encoding))
-            return {}
-
-        frame_dict = dict()
-        frame_dict['mime_type'] = mime_type
-        frame_dict['description_string'] = description_string
-        frame_dict['picture_data'] = bytearray(picture_data)
-
-        return frame_dict
-
-    def parse_comm_frame(self, frame_data):
-        '''Parses an ID3v2.3 comment frame'''
-        frame_encoding, language = struct.unpack_from('b3s', frame_data)
-        if language[0] == '\0':
-            language = ''
-        if frame_encoding == 0:
-            descriptor_len, descriptor_string = unpack_string(frame_data[4:])
-            comment_string = frame_data[4 + descriptor_len:]
-        elif frame_encoding == 1:
-            descriptor_len, descriptor_string = unpack_unicode(frame_data[4:])
-            comment_string = frame_data[4 + descriptor_len:].decode('utf-16')
-        else:
-            self.print_error("Unknown frame encoding {0:02x}".format(frame_encoding))
-            return {}
-
-        frame_dict = dict()
-        frame_dict['language'] = language
-        frame_dict['descriptor_string'] = descriptor_string
-        frame_dict['comment_string'] = comment_string
-    
-        return frame_dict
-
-    def parse_geob_frame(self, frame_data):
-        '''Parses an ID3v2.3 general encapsulated object frame'''    
-        frame_encoding = ord(frame_data[0])
-        mime_len, mime_type = unpack_string(frame_data[1:])
-    
-        if frame_encoding == 0:
-            description_len, description_string = unpack_string(frame_data[1 + mime_len:])
-            filename_len, filename_string = unpack_string(frame_data[1 + mime_len + description_len:])
-            binary_data = frame_data[1 + mime_len + description_len + filename_len:]
-        elif frame_encoding == 1:
-            description_len, description_string = unpack_unicode(frame_data[1 + mime_len:])
-            filename_len, filename_string = unpack_unicode(frame_data[1 + mime_len + description_len:])
-            binary_data = frame_data[1 + mime_len + description_len + filename_len:]
-        else:
-            self.print_error("Unknown frame encoding {0:02x}".format(frame_encoding))
-            return {}
-    
-        frame_dict = dict()
-        frame_dict['mime_type'] = mime_type
-        frame_dict['description_string'] = description_string
-        frame_dict['filename_string'] = filename_string
-        frame_dict['binary_data'] = bytearray(binary_data)
-
-        return frame_dict
-
-    def parse_mcdi_frame(self, frame_data):
-        '''Parses an ID3v2.3 music CD identifier frame'''
-        frame_dict = dict()
-        frame_dict['identifier_data'] = bytearray(frame_data)
-        
-        return frame_dict
-    
-    def parse_priv_frame(self, frame_data):
-        '''Parses an ID3v2.3 private frame'''
-        owner_len, owner_string = unpack_string(frame_data)
-        private_data = frame_data[owner_len:]
-        
-        frame_dict = dict()
-        frame_dict['owner_string'] = owner_string
-        frame_dict['private_data'] = bytearray(private_data)
-        
-        return frame_dict
-            
-    def parse_text_info_frame(self, frame_data):
-        '''Parses an ID3v2.3 text info frame'''
-        frame_encoding = ord(frame_data[0])
-        if frame_encoding == 0:
-            frame_string = frame_data[1:]
-        elif frame_encoding == 1:
-            frame_string = frame_data[1:].decode('utf-16')
-        else:
-            self.print_error("Unknown frame encoding {0:02x}".format(frame_encoding))
-            return {}
-        
-        frame_dict = dict()
-        frame_dict['frame_string'] = frame_string
-        
-        return frame_dict
-    
-    def parse_uslt_frame(self, frame_data):
-        '''Parses an ID3v2.3 unsynchronized lyric translation frame'''
-        frame_encoding, language = struct.unpack_from('b3s', frame_data)
-        if language[0] == '\0':
-            language = ''
-        if frame_encoding == 0:
-            descriptor_len, descriptor_string = unpack_string(frame_data[4:])
-            lyrics_string = frame_data[4 + descriptor_len:]
-        elif frame_encoding == 1:
-            descriptor_len, descriptor_string = unpack_unicode(frame_data[4:])
-            lyrics_string = frame_data[4 + descriptor_len:].decode('utf-16')
-        else:
-            self.print_error("Unknown frame encoding {0:02x}".format(frame_encoding))
-            return {}
-    
-        frame_dict = dict()
-        frame_dict['language'] = language
-        frame_dict['descriptor_string'] = descriptor_string
-        frame_dict['lyrics_string'] = lyrics_string
-
-        return frame_dict
-
-    def parse_id3v2dot3_frame_data(self, frame_type, frame_data):
-        if frame_type == 'APIC':
-            frame_dict = self.parse_apic_frame(frame_data)
-        elif frame_type == 'COMM':
-            frame_dict = self.parse_comm_frame(frame_data)
-        elif frame_type == 'GEOB':
-            frame_dict = self.parse_geob_frame(frame_data)
-        elif frame_type == 'MCDI':
-            frame_dict = self.parse_mcdi_frame(frame_data)
-        elif frame_type == 'PRIV':
-            frame_dict = self.parse_priv_frame(frame_data)
-        elif frame_type == 'TALB':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TBPM':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TCOM':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TCON':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TCOP':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TENC':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TFLT':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TIT1':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TIT2':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TIT3':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TLEN':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TPE1':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TPE2':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TPE3':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TPOS':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TPUB':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TRCK':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TXXX':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'TYER':
-            frame_dict = self.parse_text_info_frame(frame_data)
-        elif frame_type == 'USLT':
-            frame_dict = self.parse_uslt_frame(frame_data)
-        else:
-            self.print_error("Do not know frame type {0}".format(frame_type))
-            return
-        
-        self.handler.on_id3v2dot3_frame(frame_type, frame_dict)
-
-    def parse_id3v2dot3_frame(self):
-    
-        if self.f.tell() + 10 >= self.id3v2_size:
-            return False
-        
-        frame_header = self.f.read(10)
-
-        self.handler.on_raw_id3v2dot3_frame_header(frame_header)
-    
-        if (len(frame_header) <> 10):
-            self.print_error("Frame header not 10 bytes")
-            return False
-    
-        frame_type, frame_size, frame_flags = struct.unpack_from(">4sIH", frame_header)
-    
-        if frame_type == '\x00\x00\x00\x00':
-            return False
-
-        if frame_size == 0:
-            return False
-
-        self.handler.on_id3v2dot3_frame_header(frame_type, frame_size, frame_flags)    
-        
-        frame_data = self.f.read(frame_size)
-        
-        self.handler.on_raw_id3v2dot3_frame(frame_type, frame_data)
-
-        self.parse_id3v2dot3_frame_data(frame_type, frame_data)
-        
-        return True
-
-    def parse_id3v2_file(self, path, aatpath, handler):
-        self.path = path
-        self.handler = handler
-        
-        self.handler.on_path(path)
-    
-        if aatpath:
-            track = os.path.basename(path)
-            track = re.sub('.mp3$', '', track)
-            toppath = os.path.dirname(path)
-            album = os.path.basename(toppath)
-            toppath = os.path.dirname(toppath)
-            artist = os.path.basename(toppath)
-            self.handler.on_aatpath(artist, album, track)
-    
-        with open(path, 'rb') as self.f:
-            header = self.f.read(10)
-    
-            self.handler.on_raw_id3v2_header(header)
-            
-            if len(header) <> 10:
-                self.print_error("No ID3v2 header")
-                return
-    
-            file_identifier, version, revision, flags = struct.unpack_from('3sbbb', header[0:6])
-            
-            if file_identifier != 'ID3':
-                self.print_error("No ID3v2 identifier")
-                return
-            
-            if version == 255 or revision == 255:
-                self.print_error("Invalid ID3v2 version")
-                return
-            
-            unsynchronization = False
-            compressed = False
-            extended_header = False
-            experimental = False
-            if version == 2:
-                unsynchronization = (flags & 0x80) != 0
-                compressed = (flags & 0x40) != 0
-            elif version == 3:
-                unsynchronization = (flags & 0x80) != 0
-                extended_header = (flags & 0x40) != 0
-                experimental = (flags & 0x20) != 0
-    
-            # Since just bytes are being unpacked, consider using ord()
-            size_bytes = struct.unpack('bbbb', header[6:10])
-            size = 0
-            for byte in size_bytes:
-                if byte > 127:
-                    self.print_error("Invalid ID3v2 size byte")
-                    return
-                size = (size << 7) + byte
-
-            self.id3v2_size = size + 10
-
-            self.handler.on_id3v2_header(version, revision, flags, size)
-
-            if version <> 3:
-                x = raw_input('Version ' + version + '...press ENTER to continue')
-                return
-            
-            while self.parse_id3v2dot3_frame():
-                pass
-
 def walk_mp3_and_parse(dirpath, aatpath, parser_handler):
     '''Walks a directory tree for MP3 files and parses them'''
     if not os.path.isdir(dirpath):
@@ -513,7 +190,7 @@ def walk_mp3_and_parse(dirpath, aatpath, parser_handler):
         for file in files:
             if file.endswith('.mp3'):
                 if not parser:
-                    parser = ID3v2Parser()
+                    parser = mp3_event_parser.ID3v2Parser()
                 parser.parse_id3v2_file(os.path.join(root, file), aatpath, parser_handler)
 
 def main():
