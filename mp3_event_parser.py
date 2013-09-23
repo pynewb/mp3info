@@ -321,7 +321,7 @@ class ID3v2Parser(object):
             self.handler.on_id3v2_header(version, revision, flags, size)
 
             if version <> 3:
-                x = raw_input('Version ' + version + '...press ENTER to continue')
+                self.print_error("Version {0} is not 3".format(version))
                 return
             
             while self.parse_id3v2dot3_frame():
