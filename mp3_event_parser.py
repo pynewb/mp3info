@@ -1,20 +1,27 @@
 # Copyright (c) 2013, pynewb
 # All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
 #
-#   * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-#   * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the
-#     documentation and/or other materials provided with the distribution.
-#   * Neither the name of pynewb nor the names of its contributors may be used to endorse or promote products derived from this software without
+#   * Redistributions of source code must retain the above copyright notice, this list
+#     of conditions and the following disclaimer.
+#   * Redistributions in binary form must reproduce the above copyright notice, this
+#     list of conditions and the following disclaimer in the documentation and/or
+#     other materials provided with the distribution.
+#   * Neither the name of pynewb nor the names of its contributors may be used to endorse
+#     or promote products derived from this software without
 #     specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
-# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
-# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-# EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+# OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+# SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import print_function
 
@@ -27,8 +34,9 @@ class ID3v2Parser(object):
     This is an event-based parser, a la SAX, that parses the
     file and invokes user callbacks for particular file parts
     
-    A handler for this parser must have the following methods:
+    A handler for this parser can have any of the following methods:
     
+    on_error(msg)
     on_path(path)
     on_aatpath(artist, album, track)
     on_raw_id3v2_header(header)
@@ -39,13 +47,19 @@ class ID3v2Parser(object):
     on_id3v2dot3_frame(frame_type, frame_data)
 
     The ID3v2 specification is at http://id3.org
-    
-    TODO: support handlers that only implement a subset of these methods
     '''
 
+    def __call_handler(self, method, *args):
+        '''Call the handler method, if the handler has implemented it'''
+        if hasattr(self.handler, method):
+            cb = getattr(self.handler, method)
+            if callable(cb):
+                cb(*args)
+
     def __print_error(self, msg):
-        '''Print an error to stderr (TODO: pass to error handling method)'''
+        '''Print an error to stderr'''
         print(self.path, ':', msg, file=sys.stderr)
+        self.__call_handler('on_error', msg)
 
     def parse_apic_frame(self, frame_data):
         '''Parses an ID3v2.3 attached picture frame'''
@@ -227,8 +241,8 @@ class ID3v2Parser(object):
         else:
             self.__print_error("Do not know frame type {0}".format(frame_type))
             return
-        
-        self.handler.on_id3v2dot3_frame(frame_type, frame_dict)
+
+        self.__call_handler('on_id3v2dot3_frame', frame_type, frame_dict)
 
     def parse_id3v2dot3_frame(self):
     
@@ -237,8 +251,8 @@ class ID3v2Parser(object):
         
         frame_header = self.f.read(10)
 
-        self.handler.on_raw_id3v2dot3_frame_header(frame_header)
-    
+        self.__call_handler('on_raw_id3v2dot3_frame_header', frame_header)
+
         if (len(frame_header) <> 10):
             self.__print_error("Frame header not 10 bytes")
             return False
@@ -251,11 +265,11 @@ class ID3v2Parser(object):
         if frame_size == 0:
             return False
 
-        self.handler.on_id3v2dot3_frame_header(frame_type, frame_size, frame_flags)    
-        
+        self.__call_handler('on_id3v2dot3_frame_header', frame_type, frame_size, frame_flags)    
+
         frame_data = self.f.read(frame_size)
         
-        self.handler.on_raw_id3v2dot3_frame(frame_type, frame_data)
+        self.__call_handler('on_raw_id3v2dot3_frame', frame_type, frame_data)
 
         self.parse_id3v2dot3_frame_data(frame_type, frame_data)
         
@@ -265,7 +279,7 @@ class ID3v2Parser(object):
         self.path = path
         self.handler = handler
         
-        self.handler.on_path(path)
+        self.__call_handler('on_path', path)
     
         if aatpath:
             track = os.path.basename(path)
@@ -274,12 +288,12 @@ class ID3v2Parser(object):
             album = os.path.basename(toppath)
             toppath = os.path.dirname(toppath)
             artist = os.path.basename(toppath)
-            self.handler.on_aatpath(artist, album, track)
+            self.__call_handler('on_aatpath', artist, album, track)
     
         with open(path, 'rb') as self.f:
             header = self.f.read(10)
     
-            self.handler.on_raw_id3v2_header(header)
+            self.__call_handler('on_raw_id3v2_header', header)
             
             if len(header) <> 10:
                 self.__print_error("No ID3v2 header")
@@ -318,10 +332,10 @@ class ID3v2Parser(object):
 
             self.id3v2_size = size + 10
 
-            self.handler.on_id3v2_header(version, revision, flags, size)
+            self.__call_handler('on_id3v2_header', version, revision, flags, size)
 
             if version <> 3:
-                self.print_error("Version {0} is not 3".format(version))
+                self.__print_error("Version {0} is not 3".format(version))
                 return
             
             while self.parse_id3v2dot3_frame():
