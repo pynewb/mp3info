@@ -37,7 +37,7 @@ import mp3_event_parser
 #top = "c:\\users\\snichol\\music\\itunes\\itunes media\\music"
 pattern = re.compile('.*\.(mp3)$', re.IGNORECASE)
 
-class FileInfo:
+class FileInfo(object):
     '''Identifying information about an MP3 file'''
     
     def __init__(self):
