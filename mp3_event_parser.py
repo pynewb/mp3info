@@ -290,7 +290,7 @@ class ID3v2Parser(object):
             artist = os.path.basename(toppath)
             self.__call_handler('on_aatpath', artist, album, track)
     
-        with open(path, 'rb') as self.f:
+        with open(path, 'rb', 4096) as self.f:
             header = self.f.read(10)
     
             self.__call_handler('on_raw_id3v2_header', header)
