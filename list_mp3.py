@@ -23,10 +23,11 @@ def list_mp3(dirpath):
         elif (re.search('\.mp3$', file)):
             print path
 
-print sys.argv[0]
-
-if (len(sys.argv) > 1):
-    for arg in sys.argv[1:]:
-        list_mp3(arg)
-else:
-    list_mp3(os.path.expanduser(raw_input("Enter the top directory: ")))
+if __name__ == '__main__':
+    print sys.argv[0]
+    
+    if (len(sys.argv) > 1):
+        for arg in sys.argv[1:]:
+            list_mp3(arg)
+    else:
+        list_mp3(os.path.expanduser(raw_input("Enter the top directory: ")))

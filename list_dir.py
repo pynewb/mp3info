@@ -16,5 +16,6 @@ def list_dir(dirpath):
         else:
             print path
 
-dir = raw_input("Enter the top directory: ")
-list_dir(os.path.expanduser(dir))
+if __name__ == '__main__':
+    dir = raw_input("Enter the top directory: ")
+    list_dir(os.path.expanduser(dir))

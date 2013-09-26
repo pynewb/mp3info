@@ -35,14 +35,15 @@ def list_mp3_info(dirpath, aatpath):
         elif (re.search('\.mp3$', file)):
             print_mp3_info(path, aatpath)
 
-parser = argparse.ArgumentParser(description='List MP3 file information')
-parser.add_argument('directories', metavar='directory', nargs='+',
-                   help='The directories to traverse')
-parser.add_argument('--aatpath', dest='aatpath', action='store_const',
-                   const=True, default=False,
-                   help='Derive artist/album/track from the file path')
-
-args = parser.parse_args()
-
-for directory in args.directories:
-    list_mp3_info(directory, args.aatpath)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='List MP3 file information')
+    parser.add_argument('directories', metavar='directory', nargs='+',
+                       help='The directories to traverse')
+    parser.add_argument('--aatpath', dest='aatpath', action='store_const',
+                       const=True, default=False,
+                       help='Derive artist/album/track from the file path')
+    
+    args = parser.parse_args()
+    
+    for directory in args.directories:
+        list_mp3_info(directory, args.aatpath)

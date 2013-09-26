@@ -21,5 +21,6 @@ def list_dir(dirpath):
         else:
             print path
 
-list_dir('..')
-list_dir(os.path.abspath('..'))
+if __name__ == '__main__':
+    list_dir('..')
+    list_dir(os.path.abspath('..'))
