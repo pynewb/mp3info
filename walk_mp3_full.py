@@ -114,10 +114,14 @@ def print_uslt_frame(frame_dict):
 class ID3v2Printer(object):
     '''A handler for the ID3v2 file parser that prints the parsed pieces'''
 
-    def __init__(self, aatpath, hexdump, print_headers):
+    def __init__(self, aatpath, hexdump, print_headers, frame_types):
         self.aatpath = aatpath
         self.hexdump = hexdump
         self.print_headers = print_headers
+        if frame_types:
+        	self.frame_types = frame_types.split(',')
+        else:
+        	self.frame_types = None
 
     def on_aatpath(self, artist, album, track):
         if self.aatpath:
@@ -128,6 +132,9 @@ class ID3v2Printer(object):
             print("ID3v2 version {0:d} revision {1:d} flags {2:02x} size {3:d}".format(version, revision, flags, size))
 
     def on_id3v2dot3_frame(self, frame_type, frame_dict):
+        if self.frame_types and frame_type not in self.frame_types:
+            return
+
         if frame_type == 'APIC':
             print_apic_frame(frame_dict)
         elif frame_type == 'COMM':
@@ -215,7 +222,7 @@ def walk_mp3_and_parse(dirpath, aatpath, parser_handler):
                     parser = mp3_event_parser.ID3v2Parser()
                 parser.parse_id3v2_file(os.path.join(root, file), aatpath, parser_handler)
 
-def main():
+if __name__ == '__main__':
     '''Entry point if run as a standalone script'''
     parser = argparse.ArgumentParser(description='List MP3 file information')
     parser.add_argument('directories', metavar='directory', nargs='+',
@@ -223,6 +230,9 @@ def main():
     parser.add_argument('--aatpath', dest='aatpath', action='store_const',
                        const=True, default=False,
                        help='Derive artist/album/track from the file path')
+    parser.add_argument('--frame-types', dest='frame_types', action='store',
+                       default='',
+                       help='Frame types to print (default is all)')
     parser.add_argument('--hexdump', dest='hexdump', action='store_const',
                        const=True, default=False,
                        help='Print a hex dump of frame information')
@@ -232,9 +242,6 @@ def main():
     
     args = parser.parse_args()
     
-    parser_handler = ID3v2Printer(args.aatpath, args.hexdump, args.print_headers)
+    parser_handler = ID3v2Printer(args.aatpath, args.hexdump, args.print_headers, args.frame_types)
     for directory in args.directories:
         walk_mp3_and_parse(os.path.expanduser(directory), args.aatpath, parser_handler)
-
-if __name__ == '__main__':
-    main()
