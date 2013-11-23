@@ -119,9 +119,9 @@ class ID3v2Printer(object):
         self.hexdump = hexdump
         self.print_headers = print_headers
         if frame_types:
-        	self.frame_types = frame_types.split(',')
+            self.frame_types = frame_types.split(',')
         else:
-        	self.frame_types = None
+            self.frame_types = None
 
     def on_aatpath(self, artist, album, track):
         if self.aatpath:
